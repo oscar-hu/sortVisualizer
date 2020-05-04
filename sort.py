@@ -23,8 +23,8 @@ root.title("Sorting Visualization")
 canvas = tk.Canvas(root, height = height, width = width, bg = 'pale green')
 canvas.pack()
 
-def quickAnimation(step, prev = False, idx1 = None, idx2 = None):
-	global interrupt, sorting, quickQueue, sortSpeed
+def quickAnimation(step, prev = False, idx1 = None, idx2 = None, swapNums = False):
+	global interrupt, sorting, quickQueue, sortSpeed, size
 	if (not quickQueue and step == 1) or interrupt:
 		if prev:
 			changeColor(prev[0], defaultColor)
@@ -35,23 +35,32 @@ def quickAnimation(step, prev = False, idx1 = None, idx2 = None):
 		quickQueue = []
 		return
 
-	if sortSpeed == 1:
-		sortSpeed = 25
+	# if sortSpeed == 1: # reduce animation lag
+	# 	sortSpeed = 30
+
 	if step == 1:
 		if prev:
 			changeColor(prev[0], defaultColor)
 			changeColor(prev[1], defaultColor)
 
-		idx1, idx2 = quickQueue.pop(0)
+		indices = quickQueue.pop(0)
+		idx1 = indices[0]
+		idx2 = indices[1]
+		swapNums = indices[2]
 		changeColor(idx1, selectColor)
 		changeColor(idx2, selectColor)
-		root.after(sortSpeed, lambda: quickAnimation(2, None, idx1, idx2))
-	else:
+		if size >= 200 and not swapNums: # if large array size then only display swaps
+			root.after(0, lambda: quickAnimation(1, (idx1, idx2)))
+		else:
+			root.after(sortSpeed, lambda: quickAnimation(2, None, idx1, idx2, swapNums))
+	elif swapNums:
 		swap(idx1, idx2)
 		updateScreen()
 		changeColor(idx1, selectColor)
 		changeColor(idx2, selectColor)
 		root.after(sortSpeed, lambda: quickAnimation(1, (idx1, idx2)))
+	else:
+		root.after(0, lambda: quickAnimation(1, (idx1, idx2)))
 
 def quick(lst = None, newSort = True, start = 0, end = 0):
 	global interrupt, sorting, vals
@@ -70,25 +79,28 @@ def quick(lst = None, newSort = True, start = 0, end = 0):
 	left, right = start, end - 2
 	while left < right:
 		if lst[left] > pivot and lst[right] < pivot:
-			quickQueue.append((left, right))
+			quickQueue.append([left, right, True])
 			lst[left], lst[right] = lst[right], lst[left]
 			left += 1
 			right -= 1
 		elif lst[left] > pivot:
+			quickQueue.append([left, right, False])
 			right -= 1
 		elif lst[right] < pivot:
+			quickQueue.append([left, right, False])
 			left += 1
 		else:
+			quickQueue.append([left, right, False])
 			left += 1
 			right -= 1
 	switchIdx = right + 1 if lst[right] < pivot else right
 	lst[switchIdx], lst[end - 1] = lst[end - 1], lst[switchIdx]
-	quickQueue.append((switchIdx, end - 1))
+	quickQueue.append([switchIdx, end - 1, True])
 
 	quick(lst, False, start, switchIdx)
 	quick(lst, False, switchIdx + 1, end)
 
-	if end == size:
+	if end == size and start == 0:
 		quickAnimation(1)
 
 def shiftRight(indices): # merge helper
