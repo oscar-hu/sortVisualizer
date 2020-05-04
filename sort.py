@@ -1,6 +1,7 @@
 import tkinter as tk
 import time
 import random
+from heapq import heapify, heappop
 
 width, height = 1100, 700
 buttonW, buttonH = .1, .05
@@ -14,6 +15,7 @@ defaultColor = 'RoyalBlue'
 selectColor = 'magenta2'
 currTime = 0
 mergeQueue = []
+quickQueue = []
 
 root = tk.Tk()
 root.title("Sorting Visualization")
@@ -21,15 +23,80 @@ root.title("Sorting Visualization")
 canvas = tk.Canvas(root, height = height, width = width, bg = 'pale green')
 canvas.pack()
 
-def quick():
-	return
+def quickAnimation(step, prev = False, idx1 = None, idx2 = None):
+	global interrupt, sorting, quickQueue, sortSpeed
+	if (not quickQueue and step == 1) or interrupt:
+		if prev:
+			changeColor(prev[0], defaultColor)
+			changeColor(prev[1], defaultColor)
+		buttonColor(quick, False)
+		interrupt = False
+		sorting = False
+		quickQueue = []
+		return
+
+	if sortSpeed == 1:
+		sortSpeed = 25
+	if step == 1:
+		if prev:
+			changeColor(prev[0], defaultColor)
+			changeColor(prev[1], defaultColor)
+
+		idx1, idx2 = quickQueue.pop(0)
+		changeColor(idx1, selectColor)
+		changeColor(idx2, selectColor)
+		root.after(sortSpeed, lambda: quickAnimation(2, None, idx1, idx2))
+	else:
+		swap(idx1, idx2)
+		updateScreen()
+		changeColor(idx1, selectColor)
+		changeColor(idx2, selectColor)
+		root.after(sortSpeed, lambda: quickAnimation(1, (idx1, idx2)))
+
+def quick(lst = None, newSort = True, start = 0, end = 0):
+	global interrupt, sorting, vals
+	if sorting and newSort: # prevents another sort from being called while running
+		return
+	elif newSort:
+		sorting = True
+		buttonColor(quick, True)
+		lst = vals[:]
+		end = size
+	
+	# ALGORITHM #
+	if end - start <= 1:
+		return
+	pivot = lst[end - 1]
+	left, right = start, end - 2
+	while left < right:
+		if lst[left] > pivot and lst[right] < pivot:
+			quickQueue.append((left, right))
+			lst[left], lst[right] = lst[right], lst[left]
+			left += 1
+			right -= 1
+		elif lst[left] > pivot:
+			right -= 1
+		elif lst[right] < pivot:
+			left += 1
+		else:
+			left += 1
+			right -= 1
+	switchIdx = right + 1 if lst[right] < pivot else right
+	lst[switchIdx], lst[end - 1] = lst[end - 1], lst[switchIdx]
+	quickQueue.append((switchIdx, end - 1))
+
+	quick(lst, False, start, switchIdx)
+	quick(lst, False, switchIdx + 1, end)
+
+	if end == size:
+		quickAnimation(1)
 
 def shiftRight(indices): # merge helper
 	global vals
 	for i in indices:
 		vals[i] = vals[i - 1]
 
-def mergeAnimation(newStep = True, positions = False, prev = None, newComparison = True):
+def mergeAnimation(newStep = True, positions = False, prev = None, newComparison = True): # visualization for selection pauses
 	global interrupt, sorting, vals, mergeQueue
 	if (not mergeQueue and not positions) or interrupt:
 		buttonColor(merge, False)
@@ -87,7 +154,7 @@ def mergeAnimation(newStep = True, positions = False, prev = None, newComparison
 		else:
 			root.after(sortSpeed, lambda: mergeAnimation(True))
 
-def mergeCombine(left, right):
+def mergeCombine(left, right): # helper for merge algorithm
 	combined = []
 	while left and right:
 		if left[0] <= right[0]:
@@ -102,7 +169,7 @@ def mergeCombine(left, right):
 		combined += right
 	return combined
 
-def merge(lst = None, newSort = True, start = 0, end = 0):
+def merge(lst = None, newSort = True, start = 0, end = 0): # Merge Sort
 	global sorting
 	if sorting and newSort: # prevents another sort from being called while running
 		return
@@ -127,10 +194,36 @@ def merge(lst = None, newSort = True, start = 0, end = 0):
 	else:
 		return lst
 
-def heap():
-	return
+def heap(index = None, maxHeap = [], newSort = True, step = 1):
+	global interrupt, sorting, vals
+	if sorting and newSort: # prevents another sort from being called while running
+		return
+	elif newSort:
+		sorting = True
+		buttonColor(heap, True)
+		index = size - 1
+		maxHeap = [-x for x in vals]
+		heapify(maxHeap)
+	changeColor(0, defaultColor) if not newSort else False
+	if index == -1 or interrupt: # terminates when finished or when interrupted by scale
+		interrupt = False
+		sorting = False
+		buttonColor(heap, False)
+		return
 
-def insertion(start = 1, iteration = 0, newSort = True, prev = False):
+	# ALGORITHM #
+	if step == 1:
+		changeColor(0, selectColor)
+		root.after(sortSpeed, lambda: heap(index, maxHeap, False, 2))
+	else:
+		vals[index] = -heappop(maxHeap)
+		vals[:index] = [-x for x in maxHeap]
+		updateScreen()
+		changeColor(index, selectColor)
+		root.after(sortSpeed, lambda: heap(index - 1, maxHeap, False, 1))
+
+
+def insertion(start = 1, iteration = 0, newSort = True, prev = False): # Insertion Sort
 	global interrupt, sorting
 	changeColor(prev, defaultColor) if type(prev) == int else None
 	if sorting and newSort: # prevents another sort from being called while running
@@ -165,7 +258,7 @@ def insertion(start = 1, iteration = 0, newSort = True, prev = False):
 		root.after(sortSpeed, lambda: insertion(start + 1, 0, False, lowest))  
 		# pause after start item is swapped as long as it can go
 
-def selection(start = 0, newSort = True, iteration = 0, currMin = float('inf'), minIdx = None):
+def selection(start = 0, newSort = True, iteration = 0, currMin = float('inf'), minIdx = None): # Selection Sort
 	global interrupt, sorting
 	if sorting and newSort: # prevents another sort from being called while running
 		return
@@ -210,7 +303,7 @@ def drawRect(i, color):
 	endY = height * 0.885
 
 	x1 = startX + i * barWidth
-	y1 = endY - (vals[i] / size) * (.8 * height)
+	y1 = endY - (vals[i] / (size * 10)) * (.8 * height)
 	x2 = x1 + barWidth
 	bars[i] = canvas.create_rectangle(x1, y1, x2, endY, fill = color, outline = color, tag = 'rect')
 
@@ -226,14 +319,14 @@ def updateScreen():
 	clearRectangles(None) # clears all rectangles
 	bars = [None] * size
 	for i in range(size):
-		drawRect(i, defaultColor)
+		drawRect(i, defaultColor)		
 
 def randomVals():
 	global vals
 	random.seed(time.time())
 	vals = [None] * size
 	for i in range(size):
-		vals[i] = random.randint(1, size)
+		vals[i] = random.randint(1, size * 10)
 	updateScreen()
 
 def changeSize(newSize):
@@ -283,7 +376,7 @@ inputSize = tk.Scale(canvas, from_ = 10, to = 1000, tickinterval = 90, orient = 
 inputSize.place(relx = 0.5 - buttonW * 4.5, rely = 1 - buttonH * 2.1, relwidth = buttonW * 6, relheight = buttonH * 2)
 inputSize.set(size)
 
-randomize = tk.Button(canvas, text = 'Random Values', command = lambda: changeSize(size))
+randomize = tk.Button(canvas, text = 'Reset', command = lambda: changeSize(size))
 randomize.place(relx = 1 - buttonW * 1.1, rely = 0.005, relwidth = buttonW, relheight = buttonH)
 
 for i in range(3): # buttons for sort speed
